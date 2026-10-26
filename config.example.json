@@ -1,0 +1,7 @@
+{
+    "monitoring_folder": "C:\\Users\\username\\Desktop\\SnapTestFolder",
+    "action_mode": "NORMAL",
+    "threshold": 0.50,
+    "cooldown": 1.20,
+    "device": null
+}

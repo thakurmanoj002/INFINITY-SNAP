@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Local User Configuration
+config.json
+
+# Operating System Files
+Thumbs.db
+[Dd]esktop.ini
+.DS_Store
+
+# IDE and Editor Directories
+.vscode/
+.idea/
+*.swp
+*.swo
