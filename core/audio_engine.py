@@ -186,9 +186,11 @@ class MultiGestureAudioEngine:
     def _run_callback(self, count: int, peak: float, threshold: float):
         """Worker thread to run gesture action."""
         try:
-            self.on_gesture_callback(count, peak, threshold)
-        except Exception:
-            pass
+            if self.on_gesture_callback:
+                self.on_gesture_callback(count, peak, threshold)
+        finally:
+            with self._lock:
+                self.gesture_display = "READY"
 
     def _gesture_timer_loop(self):
         """Monitors gesture window deadlines and triggers on timeout."""

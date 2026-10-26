@@ -241,7 +241,7 @@ def recycle_item(target: Path, monitor_dir: Path) -> bool:
 def execute_batch_recycle(items: List[Path], monitor_dir: Path) -> dict:
     """
     Safely processes a batch of validated items into the Windows Recycle Bin
-    using native Windows Shell SHFileOperationW with cyberpunk styling.
+    using native Windows Shell SHFileOperationW silently without disrupting the live HUD.
     """
     summary = {
         "requested": len(items),
@@ -253,50 +253,17 @@ def execute_batch_recycle(items: List[Path], monitor_dir: Path) -> dict:
     if not items:
         return summary
 
-    if len(items) > 10:
-        with Progress(
-            SpinnerColumn(style="bold #ff007f"),
-            TextColumn("[bold #00f0ff]{task.description}[/]"),
-            BarColumn(bar_width=25, style="#2a2a40", complete_style="#00f0ff"),
-            TaskProgressColumn(),
-            console=console,
-            transient=True,
-        ) as progress:
-            task = progress.add_task("Purging targets to Recycle Bin...", total=len(items))
-            for item in items:
-                try:
-                    success = recycle_item(item, monitor_dir)
-                    if success:
-                        summary["succeeded"].append(item.name)
-                    else:
-                        summary["failed"].append(item.name)
-                        break
-                except Exception as err:
-                    summary["failed"].append(item.name)
-                    console.print(f"[bold #ff0055]  [!] Error recycling '{item.name}': {err}[/]")
-                    break
-                progress.advance(task)
-    else:
-        for item in items:
-            item_type = "DIR " if item.is_dir() else "FILE"
-            type_color = "#00f0ff" if item.is_dir() else "#00ff66"
-            try:
-                success = recycle_item(item, monitor_dir)
-                if success:
-                    summary["succeeded"].append(item.name)
-                    console.print(
-                        f"  [bold {type_color}][{item_type}][/] [white]{item.name}[/] [dim]──>[/] [bold #00ff66]MOVED TO RECYCLE BIN[/]"
-                    )
-                else:
-                    summary["failed"].append(item.name)
-                    console.print(
-                        f"  [bold {type_color}][{item_type}][/] [white]{item.name}[/] [dim]──>[/] [bold #ff0055]FAILED[/]"
-                    )
-                    break
-            except Exception as err:
+    for item in items:
+        try:
+            success = recycle_item(item, monitor_dir)
+            if success:
+                summary["succeeded"].append(item.name)
+            else:
                 summary["failed"].append(item.name)
-                console.print(f"  [bold #ff0055][ERROR][/] [white]{item.name}:[/] {err}")
                 break
+        except Exception:
+            summary["failed"].append(item.name)
+            break
 
     attempted = set(summary["succeeded"] + summary["failed"])
     summary["skipped"] = [it.name for it in items if it.name not in attempted]

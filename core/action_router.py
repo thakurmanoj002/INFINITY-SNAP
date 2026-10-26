@@ -66,101 +66,37 @@ class ActionRouter:
         total_targets = files + dirs
 
         if not total_targets:
-            console.print(
-                Panel(
-                    f"[bold #00f0ff]>>> 1 SNAP DETECTED (PEAK: {peak_amplitude:.2f} >= {threshold:.2f}) <<<[/]\n"
-                    f"[dim #00f0ff]Sector '{self.monitor_dir}' contains zero eligible items. Purge skipped.[/]",
-                    title="[bold #00f0ff]◈ SINGLE SNAP // FOLDER PURGE ◈[/]",
-                    border_style="#00f0ff",
-                    box=box.ROUNDED,
-                )
-            )
-            return "1 Snap: Zero items to recycle"
-
-        console.print(
-            Panel(
-                f"[bold white on #ff0055] ⚡ 1 SNAP DETECTED [/] [bold #ff0055]>> PEAK: {peak_amplitude:.2f} >= THRESHOLD: {threshold:.2f}[/]\n"
-                f"[bold #00f0ff]Target Sector :[/] [white]{self.monitor_dir}[/]\n"
-                f"[bold #00f0ff]Purge Payload :[/] [bold #00ff66]{len(files)} Files[/], [bold #00f0ff]{len(dirs)} Directories[/] [dim]({len(total_targets)} total items)[/]\n"
-                f"[bold #00f0ff]Purge Protocol:[/] [bold #ffe600]{self.action_mode} (INSTANT RECYCLE BIN PURGE)[/]",
-                title="[bold #ff0055]◈ 1 SNAP // FOLDER PURGE ◈[/]",
-                border_style="#ff0055",
-                box=box.DOUBLE,
-            )
-        )
+            return "1 Snap: Zero items in target sector"
 
         summary = execute_batch_recycle(total_targets, self.monitor_dir)
         success_count = len(summary["succeeded"])
         fail_count = len(summary["failed"])
 
         if fail_count == 0:
-            console.print(
-                Panel(
-                    f"[bold #00ff66]✔ ZERO-DAY PURGE COMPLETE[/] [dim]──[/] [bold white]{success_count}[/] items moved to Windows Recycle Bin.\n"
-                    f"[dim]Failed: 0 | Win32 SH_ALLOWUNDO: 100% Recoverable | System Remaining Armed[/]",
-                    border_style="#00ff66",
-                    box=box.ROUNDED,
-                )
-            )
+            return f"1 Snap: Purged {success_count} items to Recycle Bin (Recoverable)"
         else:
-            console.print(
-                Panel(
-                    f"[bold #ff0055]⚠ PURGE COMPLETED WITH WARNINGS[/]\n"
-                    f"[bold #00ff66]Succeeded:[/] {success_count} | [bold #ff0055]Failed:[/] {fail_count} | [bold #ffe600]Skipped:[/] {len(summary['skipped'])}",
-                    border_style="#ff0055",
-                    box=box.ROUNDED,
-                )
-            )
-
-        return f"1 Snap: Purged {success_count} items to Recycle Bin"
+            return f"1 Snap: Purged {success_count} items ({fail_count} failed)"
 
     def handle_double_snap(self, peak_amplitude: float, threshold: float) -> str:
         """
         2 Snaps Action: Launch Primary Developer Workspace / Macro.
         """
-        console.print(
-            Panel(
-                f"[bold black on #00f0ff] ⚡⚡ 2 SNAPS DETECTED [/] [bold #00f0ff]>> PEAK: {peak_amplitude:.2f} >= THRESHOLD: {threshold:.2f}[/]\n"
-                f"[bold #ffe600]Action Protocol:[/] [white]LAUNCH PRIMARY WORKSPACE[/]\n"
-                f"[bold #ffe600]Command         :[/] [cyan]{self.workspace_cmd}[/]",
-                title="[bold #00f0ff]◈ DOUBLE SNAP // WORKSPACE MACRO ◈[/]",
-                border_style="#00f0ff",
-                box=box.DOUBLE,
-            )
-        )
-
         try:
-            # Spawn workspace process detached
             subprocess.Popen(
                 self.workspace_cmd,
                 shell=True,
                 cwd=str(self.monitor_dir),
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
             )
-            msg = f"2 Snaps: Workspace launched ({self.workspace_cmd})"
+            return f"2 Snaps: Workspace launched ({self.workspace_cmd})"
         except Exception as e:
-            msg = f"2 Snaps: Failed to launch workspace: {e}"
-            console.print(f"[bold #ff0055]Error launching workspace: {e}[/]")
-
-        return msg
+            return f"2 Snaps: Failed to launch workspace: {e}"
 
     def handle_triple_snap(self, peak_amplitude: float, threshold: float) -> str:
         """
         3 Snaps Action: Emergency Panic Stealth Mode.
         Minimizes all desktop windows (Win + D) and mutes master audio volume.
         """
-        console.print(
-            Panel(
-                f"[bold white on #ff0055] 🚨🚨🚨 3 SNAPS DETECTED [/] [bold #ff0055]>> PEAK: {peak_amplitude:.2f} >= THRESHOLD: {threshold:.2f}[/]\n"
-                f"[bold #ffe600]Protocol Engaged:[/] [bold #ff0055]PANIC STEALTH BOSS MODE[/]\n"
-                f"[dim]1. Minimizing all active desktop windows (Win + D)...\n"
-                f"2. Toggling master audio volume mute...[/]",
-                title="[bold #ff0055]◈ TRIPLE SNAP // EMERGENCY PANIC PROTOCOL ◈[/]",
-                border_style="#ff0055",
-                box=box.HEAVY,
-            )
-        )
-
         if sys.platform == "win32":
             user32 = ctypes.windll.user32
 
@@ -174,4 +110,5 @@ class ActionRouter:
             user32.keybd_event(VK_VOLUME_MUTE, 0, 0, 0)
             user32.keybd_event(VK_VOLUME_MUTE, 0, KEYEVENTF_KEYUP, 0)
 
-        return "3 Snaps: Stealth Panic Activated (Windows Minimized & Audio Muted)"
+        return "3 Snaps: Panic Activated (Windows Minimized & Audio Muted)"
+

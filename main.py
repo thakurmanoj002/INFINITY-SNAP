@@ -147,6 +147,8 @@ def main():
 
     # Plug-and-play animated Cyberpunk HUD loop
     try:
+        if sys.stdout.isatty():
+            console.clear()
         with Live(console=console, refresh_per_second=10, transient=False) as live:
             while True:
                 time.sleep(0.08)
