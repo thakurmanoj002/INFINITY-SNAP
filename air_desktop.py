@@ -64,16 +64,32 @@ def parse_arguments():
 def main():
     args = parse_arguments()
 
+    # Query loaded macro bindings
+    from core.macro_manager import MacroManager
+    temp_mm = MacroManager()
+    macro_items = []
+    for gest, meta in temp_mm.bindings.items():
+        name = meta.get("name", "Action")
+        target = meta.get("target", "")
+        if isinstance(target, list):
+            target_str = "+".join(target)
+        else:
+            target_str = str(target)
+        macro_items.append(f"  [bold magenta]• {gest:<11}[/] : [white]{name}[/] [dim]({target_str})[/]")
+    macro_text = "\n".join(macro_items)
+
     console.print(
         Panel(
             "[bold #00f0ff]◈ SPATIAL AIR DESKTOP CONTROLLER INITIALIZING ◈[/]\n\n"
-            "[bold white]Gestures Active:[/]\n"
+            "[bold white]Standard Mouse Controls:[/]\n"
             "  [bold cyan]• Index Finger Pointing[/]   : Glide mouse cursor across desktop\n"
             "  [bold #00ff66]• Index + Thumb Pinch[/]      : Left Click (Hold to Drag & Drop)\n"
             "  [bold yellow]• Middle + Thumb Pinch[/]     : Right Click (Context Menu)\n"
             "  [bold #ff79c6]• Two Fingers Up / Down[/]    : Smooth page & document scroll\n"
             "  [dim white]• Clenched Fist[/]            : Rest / Freeze cursor in place\n\n"
-            "[dim]Press [bold yellow]Ctrl+C[/] or close preview window to exit.[/]",
+            "[bold #ff007f]Custom Spatial Macros (air_bindings.json):[/]\n"
+            f"{macro_text}\n\n"
+            "[dim]Hold any macro for ~0.38s to execute. Press [bold yellow]Ctrl+C[/] or close preview window to exit.[/]",
             title="[bold #00f0ff]⚡ APPLE VISION PRO SPATIAL DESKTOP ⚡[/]",
             border_style="bright_cyan",
         )

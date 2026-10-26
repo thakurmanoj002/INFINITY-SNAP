@@ -29,6 +29,8 @@ import urllib.request
 import cv2
 import numpy as np
 
+from core.macro_manager import MacroManager
+
 # Win32 Mouse Constants
 MOUSEEVENTF_MOVE = 0x0001
 MOUSEEVENTF_LEFTDOWN = 0x0002
@@ -151,6 +153,16 @@ class AirDesktopController:
         # MediaPipe recognizer
         self._recognizer = None
 
+        # Spatial Macro Bindings
+        self.macro_manager = MacroManager(on_trigger_callback=self._on_macro_triggered)
+        self.recent_macro_name = ""
+        self.recent_macro_time = 0.0
+
+    def _on_macro_triggered(self, gesture: str, action_name: str):
+        """Callback fired when a spatial macro executes."""
+        self.recent_macro_name = f"{gesture} -> {action_name}"
+        self.recent_macro_time = time.time()
+
     def start(self):
         """Initializes model and launches low-latency interaction loop."""
         ensure_model_file()
@@ -239,6 +251,7 @@ class AirDesktopController:
                     # Key landmarks
                     wrist = landmarks[WRIST]
                     thumb = landmarks[THUMB_TIP]
+                    thumb_mcp = landmarks[THUMB_MCP]
                     index = landmarks[INDEX_TIP]
                     index_pip = landmarks[INDEX_PIP]
                     index_mcp = landmarks[INDEX_MCP]
@@ -246,7 +259,11 @@ class AirDesktopController:
                     middle_pip = landmarks[MIDDLE_PIP]
                     middle_mcp = landmarks[MIDDLE_MCP]
                     ring = landmarks[RING_TIP]
+                    ring_pip = landmarks[RING_PIP]
+                    ring_mcp = landmarks[RING_MCP]
                     pinky = landmarks[PINKY_TIP]
+                    pinky_pip = landmarks[PINKY_PIP]
+                    pinky_mcp = landmarks[PINKY_MCP]
 
                     # 1. Calculate dynamic palm scale (Wrist to Middle Knuckle MCP)
                     # This makes all distances scale-invariant regardless of how close/far the hand is!
@@ -260,21 +277,87 @@ class AirDesktopController:
                     # 3. Finger extension states
                     is_index_extended = index.y < index_pip.y
                     is_middle_extended = middle.y < middle_pip.y
-                    is_ring_curled = ring.y > landmarks[RING_PIP].y
-                    is_pinky_curled = pinky.y > landmarks[PINKY_PIP].y
+                    is_ring_extended = ring.y < ring_pip.y
+                    is_pinky_extended = pinky.y < pinky_pip.y
+
+                    is_index_curled = index.y > index_pip.y
+                    is_middle_curled = middle.y > middle_pip.y
+                    is_ring_curled = ring.y > ring_pip.y
+                    is_pinky_curled = pinky.y > pinky_pip.y
+
                     is_fist = (
                         index.y > index_mcp.y and
                         middle.y > middle_mcp.y and
-                        ring.y > landmarks[RING_MCP].y and
-                        pinky.y > landmarks[PINKY_MCP].y
+                        ring.y > ring_mcp.y and
+                        pinky.y > pinky_mcp.y
                     )
+
+                    # Extract MediaPipe recognized top category if available
+                    mp_gesture = ""
+                    if result and result.gestures and len(result.gestures) > 0 and len(result.gestures[0]) > 0:
+                        top_cat = result.gestures[0][0]
+                        if top_cat.score >= 0.50:
+                            mp_gesture = top_cat.category_name
+
+                    # 4. Spatial Macro Candidates Classification
+                    macro_candidate: Optional[str] = None
+                    index_middle_sep = math.dist((index.x, index.y), (middle.x, middle.y)) / palm_scale
+                    thumb_wrist_dist = math.dist((thumb.x, thumb.y), (wrist.x, wrist.y)) / palm_scale
+
+                    # Detect Thumb Up
+                    if mp_gesture == "Thumb_Up" or (
+                        thumb.y < thumb_mcp.y and
+                        thumb.y < wrist.y and
+                        is_index_curled and is_middle_curled and is_ring_curled and is_pinky_curled
+                    ):
+                        macro_candidate = "THUMB_UP"
+
+                    # Detect Thumb Down
+                    elif mp_gesture == "Thumb_Down" or (
+                        thumb.y > wrist.y and
+                        thumb.y > thumb_mcp.y and
+                        is_index_curled and is_middle_curled and is_ring_curled and is_pinky_curled
+                    ):
+                        macro_candidate = "THUMB_DOWN"
+
+                    # Detect Rock On / I Love You
+                    elif is_index_extended and is_pinky_extended and is_middle_curled and is_ring_curled:
+                        if mp_gesture == "ILoveYou" or thumb_wrist_dist > 0.42:
+                            macro_candidate = "ILOVEYOU"
+                        else:
+                            macro_candidate = "ROCK_ON"
+
+                    # Detect Victory / Peace sign
+                    elif (mp_gesture == "Victory" or (
+                        is_index_extended and is_middle_extended and
+                        is_ring_curled and is_pinky_curled and
+                        index_middle_sep > 0.28
+                    )):
+                        macro_candidate = "VICTORY"
 
                     now = time.time()
 
                     # -------------------------------------------------------------
+                    # GESTURE 0: MACRO GESTURES (Thumb Up, Victory, Rock On, I Love You, Thumb Down)
+                    # -------------------------------------------------------------
+                    if macro_candidate and macro_candidate in self.macro_manager.bindings:
+                        self._release_pinch_if_active()
+                        self.scroll_anchor_y = 0.0
+
+                        action_fired = self.macro_manager.check_gesture(macro_candidate)
+                        action_name = self.macro_manager.bindings[macro_candidate].get("name", macro_candidate)
+
+                        if action_fired:
+                            mode_str = f"⚡ MACRO: {action_fired}"
+                        else:
+                            hold_pct = int(min(1.0, (now - self.macro_manager.candidate_start_time) / self.macro_manager.hold_time) * 100)
+                            mode_str = f"HOLD {macro_candidate} ({hold_pct}%) -> {action_name}"
+
+                    # -------------------------------------------------------------
                     # GESTURE 1: FIST FREEZE (Resting hand)
                     # -------------------------------------------------------------
-                    if is_fist:
+                    elif is_fist:
+                        self.macro_manager.check_gesture("NONE")
                         mode_str = "FREEZE (Resting)"
                         self._release_pinch_if_active()
                         self.scroll_anchor_y = 0.0
@@ -287,8 +370,10 @@ class AirDesktopController:
                         is_middle_extended and
                         is_ring_curled and
                         is_pinky_curled and
-                        norm_index_pinch > 0.45
+                        index_middle_sep <= 0.28 and
+                        norm_index_pinch > 0.40
                     ):
+                        self.macro_manager.check_gesture("NONE")
                         mode_str = "SCROLLING"
                         self._release_pinch_if_active()
 
@@ -321,6 +406,7 @@ class AirDesktopController:
                         norm_index_pinch > 0.35 and
                         (now - self.last_right_click_time) >= 0.60
                     ):
+                        self.macro_manager.check_gesture("NONE")
                         mode_str = "RIGHT CLICK"
                         self._release_pinch_if_active()
                         self.scroll_anchor_y = 0.0
@@ -332,6 +418,7 @@ class AirDesktopController:
                     # GESTURE 4: AIR CURSOR & PINCH LEFT CLICK / DRAG
                     # -------------------------------------------------------------
                     else:
+                        self.macro_manager.check_gesture("NONE")
                         self.scroll_anchor_y = 0.0
                         self.scroll_accumulator = 0.0
 
@@ -386,6 +473,7 @@ class AirDesktopController:
                 else:
                     self.scroll_anchor_y = 0.0
                     self.scroll_accumulator = 0.0
+                    self.macro_manager.check_gesture("NONE")
                     self._release_pinch_if_active()
 
                 # FPS calculation
@@ -465,7 +553,7 @@ class AirDesktopController:
             cv2.LINE_AA,
         )
 
-        status_color = (0, 255, 102) if "AIR" in mode or "PINCH" in mode else (255, 230, 0)
+        status_color = (0, 255, 102) if "AIR" in mode or "PINCH" in mode else ((255, 0, 255) if "MACRO" in mode or "HOLD" in mode else (255, 230, 0))
         cv2.putText(
             frame,
             f"MODE: {mode}  |  FPS: {fps:4.1f}  |  RES: {self.screen_w}x{self.screen_h}",
@@ -477,13 +565,61 @@ class AirDesktopController:
             cv2.LINE_AA,
         )
 
+        now = time.time()
+
+        # 1. Macro Hold Progress Bar
+        active_cand = self.macro_manager.active_candidate
+        if active_cand != "NONE" and active_cand in self.macro_manager.bindings:
+            hold_dur = now - self.macro_manager.candidate_start_time
+            prog = min(1.0, max(0.0, hold_dur / self.macro_manager.hold_time))
+            bar_w = 280
+            bar_h = 14
+            bx = (w - bar_w) // 2
+            by = 75
+            action_name = self.macro_manager.bindings[active_cand].get("name", active_cand)
+
+            cv2.rectangle(frame, (bx - 8, by - 20), (bx + bar_w + 8, by + bar_h + 6), (15, 15, 25), -1)
+            cv2.rectangle(frame, (bx - 8, by - 20), (bx + bar_w + 8, by + bar_h + 6), (0, 240, 255), 1)
+            cv2.putText(
+                frame,
+                f"HOLD FOR: {action_name.upper()}",
+                (bx, by - 6),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.38,
+                (0, 240, 255),
+                1,
+                cv2.LINE_AA,
+            )
+            cv2.rectangle(frame, (bx, by), (bx + bar_w, by + bar_h), (40, 40, 50), -1)
+            fill_w = int(bar_w * prog)
+            cv2.rectangle(frame, (bx, by), (bx + fill_w, by + bar_h), (0, 255, 102), -1)
+
+        # 2. Flash Banner for Recently Triggered Spatial Macro
+        if (now - self.recent_macro_time) < 1.8:
+            banner_text = f"★ SPATIAL MACRO FIRED: {self.recent_macro_name.upper()} ★"
+            tb_size = cv2.getTextSize(banner_text, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
+            tb_x = (w - tb_size[0]) // 2
+            tb_y = 115
+            cv2.rectangle(frame, (tb_x - 12, tb_y - 18), (tb_x + tb_size[0] + 12, tb_y + 8), (10, 10, 20), -1)
+            cv2.rectangle(frame, (tb_x - 12, tb_y - 18), (tb_x + tb_size[0] + 12, tb_y + 8), (0, 255, 102), 2)
+            cv2.putText(
+                frame,
+                banner_text,
+                (tb_x, tb_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (0, 255, 102),
+                1,
+                cv2.LINE_AA,
+            )
+
         # Bottom Instructions
         cv2.putText(
             frame,
-            "[Index: Move]  [Thumb+Index: Click/Drag]  [Thumb+Middle: Right Click]  [Two Fingers: Scroll]  [Fist: Freeze]",
-            (15, h - 15),
+            "[Point: Move] [Pinch: Click/Drag] [Mid Pinch: Right Click] [2-Fingers: Scroll] [Macros: Thumbs/Peace/Rock/ILY]",
+            (10, h - 14),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.36,
+            0.33,
             (200, 200, 220),
             1,
             cv2.LINE_AA,

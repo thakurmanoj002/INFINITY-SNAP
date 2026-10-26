@@ -1,0 +1,30 @@
+{
+    "THUMB_UP": {
+        "name": "Open YouTube",
+        "type": "url",
+        "target": "https://www.youtube.com"
+    },
+    "VICTORY": {
+        "name": "Launch VS Code",
+        "type": "app",
+        "target": "code ."
+    },
+    "ROCK_ON": {
+        "name": "Toggle Media Play/Pause",
+        "type": "media",
+        "target": "play_pause"
+    },
+    "ILOVEYOU": {
+        "name": "Show Desktop",
+        "type": "hotkey",
+        "target": [
+            "win",
+            "d"
+        ]
+    },
+    "THUMB_DOWN": {
+        "name": "Mute Master Audio",
+        "type": "media",
+        "target": "mute"
+    }
+}

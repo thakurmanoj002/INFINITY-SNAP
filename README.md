@@ -13,6 +13,8 @@ INFINITY SNAP/
 │
 ├── main.py                     # Central conductor & acoustic snap surveillance entry point
 ├── air_desktop.py              # Standalone Apple Vision Pro spatial air desktop launcher
+├── air_bindings.json           # User-customizable spatial gesture macros (URLs, Apps, Hotkeys)
+├── air_bindings.example.json   # Template bindings configuration
 ├── config.json                 # Auto-generated or user configuration
 ├── config.example.json         # Example configuration template
 ├── requirements.txt            # Runtime dependencies
@@ -22,6 +24,7 @@ INFINITY SNAP/
 ├── core/                       # Clean modular architecture
 │   ├── __init__.py
 │   ├── air_desktop.py          # Spatial Air Mouse engine (Cursor, Pinch, Scroll, Right Click)
+│   ├── macro_manager.py        # Spatial macro binding engine (Win32 hotkeys, URLs, apps, media)
 │   ├── audio_engine.py         # Acoustic transient listener, spectral filter & live VU meter
 │   ├── action_router.py        # Independent Handlers: 1 Snap (Panic Stealth), 2 Snaps (Folder Purge)
 │   ├── fs_monitor.py           # Win32 FindFirstChangeNotificationW folder observer
@@ -173,7 +176,63 @@ Infinity Snap includes a completely standalone spatial hand controller that tran
 
 ---
 
-## 8. Launching & Commands
+## 8. Custom Spatial Macro Bindings (`air_bindings.json`)
+
+You can map any custom spatial hand pose to launch websites, open desktop applications, trigger Windows keyboard shortcuts, or control media playback!
+
+Edit `air_bindings.json` directly (Infinity Snap automatically creates an `air_bindings.example.json` template on boot):
+
+### Default Spatial Gestures:
+| Spatial Gesture | Hand Pose | Default Action | Action Type | Target |
+| :--- | :--- | :--- | :--- | :--- |
+| `THUMB_UP` | Thumb pointed upwards, 4 fingers curled | **Open YouTube** | `url` | `https://www.youtube.com` |
+| `VICTORY` | Peace sign ("V" index & middle extended) | **Launch VS Code** | `app` | `code .` |
+| `ROCK_ON` | Metal horns (Index + pinky extended) | **Media Play / Pause** | `media` | `play_pause` |
+| `ILOVEYOU` | Thumb + index + pinky extended | **Show Desktop** | `hotkey` | `["win", "d"]` |
+| `THUMB_DOWN` | Thumb pointed downwards | **Mute Master Audio** | `media` | `mute` |
+
+### Configuration Syntax (`air_bindings.json`):
+```json
+{
+    "THUMB_UP": {
+        "name": "Open YouTube",
+        "type": "url",
+        "target": "https://www.youtube.com"
+    },
+    "VICTORY": {
+        "name": "Launch VS Code",
+        "type": "app",
+        "target": "code ."
+    },
+    "ROCK_ON": {
+        "name": "Toggle Media Play/Pause",
+        "type": "media",
+        "target": "play_pause"
+    },
+    "ILOVEYOU": {
+        "name": "Show Desktop",
+        "type": "hotkey",
+        "target": ["win", "d"]
+    },
+    "THUMB_DOWN": {
+        "name": "Mute Master Audio",
+        "type": "media",
+        "target": "mute"
+    }
+}
+```
+
+### Action Types Supported:
+- **`url`**: Opens target in your default web browser (e.g. `"https://github.com"`, `"https://spotify.com"`).
+- **`app` / `shell`**: Executes any native executable or command via Windows Shell (e.g. `"code ."`, `"notepad"`, `"calc"`, `"wt"`).
+- **`hotkey`**: Simulates native OS key combinations (e.g. `["win", "d"]`, `["ctrl", "shift", "esc"]`, `["alt", "tab"]`).
+- **`media`**: Controls Windows media playback (`"play_pause"`, `"next_track"`, `"prev_track"`, `"mute"`, `"volume_up"`, `"volume_down"`).
+
+> **Hold Confirmation & Cooldown**: To prevent accidental triggering while moving the mouse cursor, all macro poses require a **continuous hold of ~0.38 seconds** with a live progress bar rendered on the HUD, followed by a **1.8-second cooldown**.
+
+---
+
+## 9. Launching & Commands
 
 ### 1. Launch Pure Acoustic Snap Surveillance (Instant Snaps)
 ```powershell
@@ -210,7 +269,7 @@ python main.py -l
 
 ---
 
-## 9. Security & Safety Firewalls
+## 10. Security & Safety Firewalls
 
 - **Strict Forbidden Paths**: Drive roots (`C:\`), Windows system folders (`C:\Windows`), Program Files, User Profile roots (`C:\Users\<user>`), Desktop/Documents root, and the project folder itself are strictly blocked by boundary firewalls.
 - **Symlink / Junction Rejection**: Symbolic links, NTFS junctions, and reparse points are filtered out to prevent path traversal attacks.
