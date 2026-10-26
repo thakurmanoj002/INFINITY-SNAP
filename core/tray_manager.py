@@ -61,12 +61,14 @@ class TrayManager:
         on_toggle_arm: Callable[[], None],
         on_trigger_single: Optional[Callable[[], None]] = None,
         on_trigger_double: Optional[Callable[[], None]] = None,
+        on_toggle_camera: Optional[Callable[[], None]] = None,
         on_exit: Optional[Callable[[], None]] = None,
     ):
         self.monitor_dir = Path(monitor_dir).resolve()
         self.on_toggle_arm = on_toggle_arm
         self.on_trigger_single = on_trigger_single
         self.on_trigger_double = on_trigger_double
+        self.on_toggle_camera = on_toggle_camera
         self.on_exit = on_exit
 
         self.current_state = "ARMED"
@@ -85,7 +87,7 @@ class TrayManager:
 
     def _build_menu(self) -> pystray.Menu:
         """Constructs the right-click tray context menu."""
-        return pystray.Menu(
+        menu_items = [
             pystray.MenuItem(
                 lambda text: f"Infinity Snap: [{self.current_state}]",
                 action=None,
@@ -100,6 +102,17 @@ class TrayManager:
                 "Open Monitored Sector",
                 action=self._action_open_folder,
             ),
+        ]
+
+        if self.on_toggle_camera:
+            menu_items.append(
+                pystray.MenuItem(
+                    "Toggle Camera Tracking (Vision Pro)",
+                    action=self._action_toggle_camera,
+                )
+            )
+
+        menu_items.extend([
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Trigger Panic Stealth (1 Snap)",
@@ -114,7 +127,9 @@ class TrayManager:
                 "Exit Infinity Snap",
                 action=self._action_exit,
             ),
-        )
+        ])
+
+        return pystray.Menu(*menu_items)
 
     def set_state(self, state: str):
         """Updates the icon appearance and title according to state ('ARMED', 'PAUSED', 'TRIGGERED')."""
@@ -142,6 +157,10 @@ class TrayManager:
                 os.startfile(str(self.monitor_dir))
         except Exception:
             pass
+
+    def _action_toggle_camera(self, icon, item):
+        if self.on_toggle_camera:
+            self.on_toggle_camera()
 
     def _action_trigger_single(self, icon, item):
         if self.on_trigger_single:

@@ -22,3 +22,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# MediaPipe Task Models (Auto-downloaded on launch)
+models/

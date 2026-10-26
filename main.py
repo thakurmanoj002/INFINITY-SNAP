@@ -33,6 +33,7 @@ from core.hud import build_hud_panel, print_audio_devices
 from core.notification_manager import NotificationManager
 from core.plugin_engine import PluginEngine
 from core.tray_manager import TrayManager
+from core.vision_engine import VisionEngine
 
 console = Console()
 
@@ -74,6 +75,29 @@ def parse_arguments():
         "--list-devices",
         action="store_true",
         help="List available audio input devices and exit",
+    )
+    parser.add_argument(
+        "-v",
+        "--camera",
+        "--vision",
+        action="store_true",
+        help="Enable Apple Vision Pro optical hand and air gesture tracking",
+    )
+    parser.add_argument(
+        "--cam-preview",
+        action="store_true",
+        help="Open Cyberpunk real-time camera preview window with neon hand skeleton HUD",
+    )
+    parser.add_argument(
+        "--cam-index",
+        type=int,
+        default=None,
+        help="Select webcam device index (default: 0)",
+    )
+    parser.add_argument(
+        "--multimodal",
+        action="store_true",
+        help="Require simultaneous audio snap + visual hand snap posture for 100% false-positive immunity",
     )
     return parser.parse_args()
 
@@ -122,15 +146,45 @@ def main():
     should_exit = False
     last_event = "System initialized and armed"
 
+    # Vision & Optical tracking configuration
+    enable_camera = args.camera or config.get("enable_camera", False)
+    enable_preview = args.cam_preview or config.get("camera_preview", False)
+    cam_idx = args.cam_index if args.cam_index is not None else int(config.get("camera_device", 0))
+    multimodal = args.multimodal or config.get("multimodal_fusion", False)
+
     # Initialize modular subsystems
     plugin_engine = PluginEngine(project_root)
     notification_manager = NotificationManager("Infinity Snap")
+    fs_monitor = ContinuousFolderMonitor(monitor_dir)
+
+    vision_engine: Optional[VisionEngine] = None
+
+    def on_vision_gesture(gesture_name: str, confidence: float):
+        nonlocal last_event
+        if gesture_name == "OPEN_PALM":
+            toggle_arm_state()
+        elif is_armed:
+            tray_manager.trigger_flash("ARMED")
+            res = action_router.handle_air_gesture(gesture_name, confidence)
+            last_event = res
+
+    if enable_camera:
+        try:
+            vision_engine = VisionEngine(
+                camera_index=cam_idx,
+                enable_preview=enable_preview,
+                on_gesture_callback=on_vision_gesture,
+            )
+        except Exception:
+            vision_engine = None
+
     action_router = ActionRouter(
         config,
         plugin_engine=plugin_engine,
         notification_manager=notification_manager,
+        vision_engine=vision_engine,
+        multimodal_fusion=multimodal,
     )
-    fs_monitor = ContinuousFolderMonitor(monitor_dir)
 
     def on_gesture_intercepted(count: int, peak: float, thresh: float):
         nonlocal last_event
@@ -149,14 +203,36 @@ def main():
                 "⚡ SENSOR ARMED",
                 "Surveillance engaged. Listening for acoustic transients.",
             )
-            last_event = "Sensor re-armed (Ctrl+Alt+S / Tray)"
+            last_event = "Sensor re-armed (Ctrl+Alt+S / Tray / Palm)"
         else:
             tray_manager.set_state("PAUSED")
             notification_manager.send_toast(
                 "⚡ SENSOR MUTED (PAUSED)",
                 "Microphone listening paused [Ctrl+Alt+S to resume].",
             )
-            last_event = "Sensor muted/paused (Ctrl+Alt+S / Tray)"
+            last_event = "Sensor muted/paused (Standby mode)"
+
+    def toggle_camera_tracking():
+        nonlocal vision_engine, last_event
+        if vision_engine and vision_engine.is_camera_active:
+            vision_engine.stop()
+            vision_engine = None
+            action_router.vision_engine = None
+            notification_manager.send_toast("⚡ OPTICAL TRACKING OFF", "Camera gesture tracking disengaged.")
+            last_event = "Camera tracking disengaged"
+        else:
+            try:
+                vision_engine = VisionEngine(
+                    camera_index=cam_idx,
+                    enable_preview=enable_preview,
+                    on_gesture_callback=on_vision_gesture,
+                )
+                vision_engine.start()
+                action_router.vision_engine = vision_engine
+                notification_manager.send_toast("⚡ OPTICAL TRACKING ON", "Apple Vision Pro hand tracking active.")
+                last_event = "Camera tracking engaged"
+            except Exception as e:
+                last_event = f"Camera failed: {e}"
 
     def trigger_manual_single():
         nonlocal last_event
@@ -189,6 +265,7 @@ def main():
         on_toggle_arm=toggle_arm_state,
         on_trigger_single=trigger_manual_single,
         on_trigger_double=trigger_manual_double,
+        on_toggle_camera=toggle_camera_tracking,
         on_exit=request_exit,
     )
     hotkey_manager = GlobalHotkeyManager(on_toggle=toggle_arm_state)
@@ -197,12 +274,19 @@ def main():
     fs_monitor.start()
     hotkey_manager.start()
     tray_manager.start()
+    if vision_engine:
+        try:
+            vision_engine.start()
+        except Exception:
+            vision_engine = None
 
     try:
         audio_engine.start()
     except Exception as err:
         console.print(f"\n[bold #ff0055][AUDIO ERROR][/] Unable to start audio stream: {err}")
         console.print("[dim]Check microphone access in Windows Privacy Settings.[/]\n")
+        if vision_engine:
+            vision_engine.stop()
         tray_manager.stop()
         hotkey_manager.stop()
         fs_monitor.stop()
@@ -216,9 +300,13 @@ def main():
             while not should_exit:
                 time.sleep(0.08)
 
-                # Fetch real-time telemetry from audio engine & filesystem watcher
+                # Fetch real-time telemetry from audio engine, vision engine & filesystem watcher
                 live_peak, live_rms, live_dbfs, gesture_state = audio_engine.get_telemetry()
                 f_count, d_count = fs_monitor.get_counts()
+
+                cam_active, vision_gesture, _, _, vision_fps = (
+                    vision_engine.get_telemetry() if vision_engine else (False, "NONE", 0.0, 0, 0.0)
+                )
 
                 # Build updated Cyberpunk HUD frame
                 panel = build_hud_panel(
@@ -233,14 +321,19 @@ def main():
                     gesture_state=gesture_state,
                     last_event=last_event,
                     is_armed=is_armed,
+                    camera_active=cam_active,
+                    vision_gesture=vision_gesture,
+                    vision_fps=vision_fps,
                 )
                 live.update(panel)
 
     except KeyboardInterrupt:
         console.print(
-            "\n[bold #ff007f]⚡ DISENGAGED[/] [dim]──[/] [dim cyan]Infinity Snap shut down. Audio transducer, tray icon, and folder watcher released.[/]\n"
+            "\n[bold #ff007f]⚡ DISENGAGED[/] [dim]──[/] [dim cyan]Infinity Snap shut down. Audio transducer, camera, and watcher released.[/]\n"
         )
     finally:
+        if vision_engine:
+            vision_engine.stop()
         tray_manager.stop()
         hotkey_manager.stop()
         audio_engine.stop()

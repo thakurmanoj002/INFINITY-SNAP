@@ -28,7 +28,8 @@ INFINITY SNAP/
 │   ├── hotkey_manager.py       # Win32 RegisterHotKey OS-wide (Ctrl + Alt + S) toggle
 │   ├── notification_manager.py # Windows 10/11 Action Center native toast notifications
 │   ├── plugin_engine.py        # Asynchronous custom script/webhook dispatcher
-│   └── tray_manager.py         # Windows System Tray with dynamic glowing emblem
+│   ├── tray_manager.py         # Windows System Tray with dynamic glowing emblem
+│   └── vision_engine.py        # Apple Vision Pro 3D hand tracking & air gesture engine
 │
 ├── plugins/                    # Drop custom scripts here (.bat, .ps1, .py, .exe)
 │   ├── single_snap/            # Runs on 1 Snap (Panic Mode)
@@ -155,7 +156,23 @@ Infinity Snap allows you to hook any custom script, external webhook, or IoT aut
 
 ---
 
-## 7. Configuration & Commands
+## 7. Apple Vision Pro Mode — Spatial Hand & Air Gesture Tracking
+
+Infinity Snap features an optical tracking engine using **Google MediaPipe** and **OpenCV** to track 21 3D joint landmarks on each hand in real-time at 30+ FPS directly from your standard webcam:
+
+| Vision Pro Gesture | Physical Hand Motion | Desktop Action Triggered |
+| :--- | :--- | :--- |
+| **Closed Fist** | Clench your fist in view of camera | **Panic Stealth Boss Mode** (Minimizes all windows & mutes volume) |
+| **Open Palm** | Hold open 5 fingers up | **Toggle Mute / Arm** (Standby pause / resume) |
+| **Spatial Pinch** | Tap Index Fingertip to Thumb | **Air Pinch Action** (Fires notification & plugins) |
+| **Snap Posture** | Press Thumb to Middle Finger | **Multimodal Snap Gate** (Verifies acoustic snap posture) |
+
+### 🧬 Multimodal Fusion (Zero False Triggers)
+When running with `--multimodal`, Infinity Snap requires **both** seeing the physical snap hand posture on camera **AND** hearing the acoustic snap sound at that exact moment. Any stray claps, desk bangs, or door slams without a visible hand snap are automatically rejected!
+
+---
+
+## 8. Configuration & Commands
 
 Configuration is loaded from `config.json`:
 ```json
@@ -168,9 +185,21 @@ Configuration is loaded from `config.json`:
 }
 ```
 
-### Optional Command-Line Overrides:
+### Command-Line Execution Options:
 ```powershell
-# Re-open the interactive setup wizard
+# Standard plug-and-play surveillance
+python main.py
+
+# Launch with Apple Vision Pro camera hand tracking enabled
+python main.py -v
+
+# Launch with live Cyberpunk neon skeleton camera preview window
+python main.py -v --cam-preview
+
+# Launch with Multimodal Fusion (zero false positives: requires hand snap + audio snap)
+python main.py -v --multimodal
+
+# Re-open interactive setup wizard
 python main.py --setup
 
 # Override audio threshold sensitivity (0.05 to 0.95)
@@ -178,14 +207,11 @@ python main.py -t 0.55
 
 # List all audio input sensors
 python main.py -l
-
-# Override gesture cooldown in seconds
-python main.py -c 1.5
 ```
 
 ---
 
-## 8. Security & Safety Firewalls
+## 9. Security & Safety Firewalls
 
 - **Strict Forbidden Paths**: Drive roots (`C:\`), Windows system folders (`C:\Windows`), Program Files, User Profile roots (`C:\Users\<user>`), Desktop/Documents root, and the project folder itself are strictly blocked by boundary firewalls.
 - **Symlink / Junction Rejection**: Symbolic links, NTFS junctions, and reparse points are filtered out to prevent path traversal attacks.
