@@ -2,7 +2,7 @@
 Infinity Snap — Plug-and-Play Multi-Gesture Cyberpunk Desktop Automator
 =======================================================================
 Central connection hub connecting:
-  - Multi-Gesture Audio Engine (1 snap = Purge, 2 snaps = Workspace, 3 snaps = Panic)
+  - Multi-Gesture Audio Engine (1 snap = Panic Stealth Mode, 2 snaps = Instant Folder Purge)
   - Audio-Reactive Cyberpunk HUD with Live Animated VU Meter
   - Win32 FindFirstChangeNotificationW Continuous Directory Watcher
   - Native Windows Shell SHFileOperationW Recycle Bin Purge Engine

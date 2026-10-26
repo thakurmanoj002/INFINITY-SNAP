@@ -21,7 +21,7 @@ INFINITY SNAP/
 ├── core/                       # Clean modular architecture
 │   ├── __init__.py
 │   ├── audio_engine.py         # Multi-gesture acoustic listener, spectral filter & live VU meter
-│   ├── action_router.py        # Handlers: 1 Snap (Purge), 2 Snaps (Workspace), 3 Snaps (Panic Mode)
+│   ├── action_router.py        # Handlers: 1 Snap (Panic Stealth Mode), 2 Snaps (Instant Folder Purge)
 │   ├── fs_monitor.py           # Win32 FindFirstChangeNotificationW folder observer & JIT validator
 │   ├── hud.py                  # Cyberpunk HUD renderer (live VU, gesture state, payload stats)
 │   └── config_manager.py       # Configuration loader, saver, and first-run setup wizard
@@ -42,9 +42,8 @@ Infinity Snap accumulates snap transients within an intelligent time window:
 
 | Gesture Pattern | Action Executed | Description |
 | :--- | :--- | :--- |
-| **1 Snap** | **Instant Folder Purge** | Immediately dispatches all eligible files & subfolders in the target sector to the Windows Recycle Bin using native `SHFileOperationW`. Zero permanent deletion fallback. |
-| **2 Snaps in ~1s** | **Launch Workspace Macro** | Launches your primary developer workspace (e.g. VS Code, browser, or custom command configured in `config.json`). |
-| **3 Snaps in ~1.5s** | **Panic Stealth Boss Mode** | Instantly minimizes all active desktop windows (`Win + D`) and mutes master audio volume (`VK_VOLUME_MUTE`). |
+| **1 Snap** | **Panic Stealth Boss Mode** | Instantly minimizes all active desktop windows (`Win + D`) and mutes master audio volume (`VK_VOLUME_MUTE`). Fires after a brief ~0.65s gesture window if no second snap occurs. |
+| **2 Snaps** | **Instant Folder Purge** | Immediately triggers upon the second snap without waiting! Dispatches all eligible files & subfolders in the target sector directly to the Windows Recycle Bin using native `SHFileOperationW`. 100% recoverable. |
 
 ---
 
@@ -64,8 +63,8 @@ The interface is rendered with `rich.live.Live` at 10 FPS, providing an animated
 │   SECTOR PAYLOAD         ::  80 Files │ 0 Directories (80 items ready)      │
 │   LIVE AUDIO VU          ::  ███████░░░░░░░░░░░░░ -14.2 dBFS │ TRIGGER:     │
 │                              0.50                                           │
-│   GESTURE MATRIX         ::  1 Snap: Purge │ 2 Snaps: Workspace │ 3         │
-│                              Snaps: Panic Lock                              │
+│   GESTURE MATRIX         ::  1 Snap: Panic Stealth │ 2 Snaps: Instant       │
+│                              Folder Purge                                   │
 │   GESTURE DETECTOR       ::  ● READY ── Listening for transients            │
 │   LAST TELEMETRY         ::  System initialized and armed                   │
 │                                                                             │
@@ -111,7 +110,6 @@ Configuration is loaded from `config.json`:
     "action_mode": "NORMAL",
     "threshold": 0.50,
     "cooldown": 1.20,
-    "workspace_cmd": "code .",
     "device": null
 }
 ```

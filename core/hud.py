@@ -82,10 +82,8 @@ def build_hud_panel(
     )
 
     # Gesture status styling
-    if "TRIPLE" in gesture_state:
+    if "DOUBLE" in gesture_state:
         gesture_styled = f"[bold white on #ff0055] {gesture_state} [/]"
-    elif "DOUBLE" in gesture_state:
-        gesture_styled = f"[bold black on #ffe600] {gesture_state} [/]"
     elif "SNAP 1" in gesture_state:
         gesture_styled = f"[bold black on #00f0ff] {gesture_state} [/]"
     else:
@@ -113,7 +111,7 @@ def build_hud_panel(
     table.add_row(
         "GESTURE MATRIX",
         "::",
-        "[bold cyan]1 Snap:[/] [dim]Purge[/] [dim]│[/] [bold yellow]2 Snaps:[/] [dim]Workspace[/] [dim]│[/] [bold #ff0055]3 Snaps:[/] [dim]Panic Lock[/]",
+        "[bold cyan]1 Snap:[/] [dim]Panic Stealth[/] [dim]│[/] [bold #ff0055]2 Snaps:[/] [dim]Instant Folder Purge[/]",
     )
     table.add_row("GESTURE DETECTOR", "::", gesture_styled)
     table.add_row("LAST TELEMETRY", "::", f"[italic #ff79c6]{last_event}[/]")

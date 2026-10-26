@@ -2,7 +2,7 @@
 Infinity Snap — Multi-Gesture Audio Engine
 ==========================================
 Real-time microphone analysis, spectral differentiation, live VU telemetry,
-and multi-snap gesture accumulator (1 snap, 2 snaps, 3 snaps).
+and multi-snap gesture accumulator (1 snap = Panic Stealth, 2 snaps = Folder Purge).
 """
 
 import threading
@@ -19,8 +19,7 @@ DEFAULT_COOLDOWN = 1.20
 
 # Multi-snap accumulation timing (seconds)
 DEBOUNCE_INTERVAL = 0.12    # Ignores echo/reverberation of the same snap
-GESTURE_BASE_WINDOW = 0.80  # Time to deliver a 2nd snap
-GESTURE_EXTENSION = 0.45    # Added time if 2nd snap detected to allow 3rd snap
+GESTURE_BASE_WINDOW = 0.65  # Time to wait for a 2nd snap before firing single snap
 
 
 class MultiGestureAudioEngine:
@@ -153,16 +152,11 @@ class MultiGestureAudioEngine:
                         self._window_deadline = now + GESTURE_BASE_WINDOW
                         self._max_peak_in_gesture = peak
                         self.gesture_display = "SNAP 1 INTERCEPTED (Listening...)"
-                    elif self._snap_count == 1:
+                    elif self._snap_count >= 1:
                         self._snap_count = 2
-                        self._window_deadline = now + GESTURE_EXTENSION
                         self._max_peak_in_gesture = max(self._max_peak_in_gesture, peak)
-                        self.gesture_display = "DOUBLE SNAP (Listening for 3rd...)"
-                    elif self._snap_count >= 2:
-                        self._snap_count = 3
-                        self._max_peak_in_gesture = max(self._max_peak_in_gesture, peak)
-                        self.gesture_display = "TRIPLE SNAP DETECTED!"
-                        # Immediate trigger on 3 snaps without waiting
+                        self.gesture_display = "DOUBLE SNAP DETECTED!"
+                        # Immediate trigger on 2 snaps without waiting
                         self._dispatch_gesture_locked()
 
     def _dispatch_gesture_locked(self):
