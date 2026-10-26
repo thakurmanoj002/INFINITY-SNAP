@@ -82,7 +82,6 @@ def main():
     controller = AirDesktopController(
         camera_index=args.camera,
         enable_preview=not args.no_preview,
-        smoothing=args.smoothing,
         scroll_speed=args.scroll_speed,
     )
 
