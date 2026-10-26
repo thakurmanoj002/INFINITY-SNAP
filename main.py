@@ -29,11 +29,11 @@ from core.audio_engine import MultiGestureAudioEngine
 from core.config_manager import load_config, run_first_time_setup
 from core.fs_monitor import ContinuousFolderMonitor, validate_monitoring_folder
 from core.hotkey_manager import GlobalHotkeyManager
+from core.air_desktop import AirDesktopController
 from core.hud import build_hud_panel, print_audio_devices
 from core.notification_manager import NotificationManager
 from core.plugin_engine import PluginEngine
 from core.tray_manager import TrayManager
-from core.vision_engine import VisionEngine
 
 console = Console()
 
@@ -77,27 +77,20 @@ def parse_arguments():
         help="List available audio input devices and exit",
     )
     parser.add_argument(
-        "-v",
-        "--camera",
-        "--vision",
+        "--air-desktop",
         action="store_true",
-        help="Enable Apple Vision Pro optical hand and air gesture tracking",
+        help="Run Apple Vision Pro spatial air mouse alongside acoustic snap surveillance",
     )
     parser.add_argument(
         "--cam-preview",
         action="store_true",
-        help="Open Cyberpunk real-time camera preview window with neon hand skeleton HUD",
+        help="Open Cyberpunk camera preview HUD window for air desktop controller",
     )
     parser.add_argument(
         "--cam-index",
         type=int,
-        default=None,
+        default=0,
         help="Select webcam device index (default: 0)",
-    )
-    parser.add_argument(
-        "--multimodal",
-        action="store_true",
-        help="Require simultaneous audio snap + visual hand snap posture for 100% false-positive immunity",
     )
     return parser.parse_args()
 
@@ -146,45 +139,32 @@ def main():
     should_exit = False
     last_event = "System initialized and armed"
 
-    # Vision & Optical tracking configuration
-    enable_camera = args.camera or config.get("enable_camera", False)
+    # Air Desktop Spatial Tracking configuration
+    enable_air_desktop = args.air_desktop or config.get("air_desktop", False)
     enable_preview = args.cam_preview or config.get("camera_preview", False)
     cam_idx = args.cam_index if args.cam_index is not None else int(config.get("camera_device", 0))
-    multimodal = args.multimodal or config.get("multimodal_fusion", False)
 
     # Initialize modular subsystems
     plugin_engine = PluginEngine(project_root)
     notification_manager = NotificationManager("Infinity Snap")
     fs_monitor = ContinuousFolderMonitor(monitor_dir)
 
-    vision_engine: Optional[VisionEngine] = None
-
-    def on_vision_gesture(gesture_name: str, confidence: float):
-        nonlocal last_event
-        if gesture_name == "OPEN_PALM":
-            toggle_arm_state()
-        elif is_armed:
-            tray_manager.trigger_flash("ARMED")
-            res = action_router.handle_air_gesture(gesture_name, confidence)
-            last_event = res
-
-    if enable_camera:
-        try:
-            vision_engine = VisionEngine(
-                camera_index=cam_idx,
-                enable_preview=enable_preview,
-                on_gesture_callback=on_vision_gesture,
-            )
-        except Exception:
-            vision_engine = None
-
+    # Pure acoustic action router (100% separate from vision/air gestures)
     action_router = ActionRouter(
         config,
         plugin_engine=plugin_engine,
         notification_manager=notification_manager,
-        vision_engine=vision_engine,
-        multimodal_fusion=multimodal,
     )
+
+    air_controller: Optional[AirDesktopController] = None
+    if enable_air_desktop:
+        try:
+            air_controller = AirDesktopController(
+                camera_index=cam_idx,
+                enable_preview=enable_preview,
+            )
+        except Exception:
+            air_controller = None
 
     def on_gesture_intercepted(count: int, peak: float, thresh: float):
         nonlocal last_event
@@ -203,7 +183,7 @@ def main():
                 "⚡ SENSOR ARMED",
                 "Surveillance engaged. Listening for acoustic transients.",
             )
-            last_event = "Sensor re-armed (Ctrl+Alt+S / Tray / Palm)"
+            last_event = "Sensor re-armed (Ctrl+Alt+S / Tray)"
         else:
             tray_manager.set_state("PAUSED")
             notification_manager.send_toast(
@@ -212,27 +192,24 @@ def main():
             )
             last_event = "Sensor muted/paused (Standby mode)"
 
-    def toggle_camera_tracking():
-        nonlocal vision_engine, last_event
-        if vision_engine and vision_engine.is_camera_active:
-            vision_engine.stop()
-            vision_engine = None
-            action_router.vision_engine = None
-            notification_manager.send_toast("⚡ OPTICAL TRACKING OFF", "Camera gesture tracking disengaged.")
-            last_event = "Camera tracking disengaged"
+    def toggle_air_desktop():
+        nonlocal air_controller, last_event
+        if air_controller and air_controller._running:
+            air_controller.stop()
+            air_controller = None
+            notification_manager.send_toast("⚡ AIR DESKTOP OFF", "Spatial air mouse disengaged.")
+            last_event = "Air Desktop Controller disengaged"
         else:
             try:
-                vision_engine = VisionEngine(
+                air_controller = AirDesktopController(
                     camera_index=cam_idx,
                     enable_preview=enable_preview,
-                    on_gesture_callback=on_vision_gesture,
                 )
-                vision_engine.start()
-                action_router.vision_engine = vision_engine
-                notification_manager.send_toast("⚡ OPTICAL TRACKING ON", "Apple Vision Pro hand tracking active.")
-                last_event = "Camera tracking engaged"
+                air_controller.start()
+                notification_manager.send_toast("⚡ AIR DESKTOP ON", "Apple Vision Pro air mouse active.")
+                last_event = "Air Desktop Controller engaged"
             except Exception as e:
-                last_event = f"Camera failed: {e}"
+                last_event = f"Air Desktop failed: {e}"
 
     def trigger_manual_single():
         nonlocal last_event
@@ -265,7 +242,7 @@ def main():
         on_toggle_arm=toggle_arm_state,
         on_trigger_single=trigger_manual_single,
         on_trigger_double=trigger_manual_double,
-        on_toggle_camera=toggle_camera_tracking,
+        on_toggle_camera=toggle_air_desktop,
         on_exit=request_exit,
     )
     hotkey_manager = GlobalHotkeyManager(on_toggle=toggle_arm_state)
@@ -274,19 +251,19 @@ def main():
     fs_monitor.start()
     hotkey_manager.start()
     tray_manager.start()
-    if vision_engine:
+    if air_controller:
         try:
-            vision_engine.start()
+            air_controller.start()
         except Exception:
-            vision_engine = None
+            air_controller = None
 
     try:
         audio_engine.start()
     except Exception as err:
         console.print(f"\n[bold #ff0055][AUDIO ERROR][/] Unable to start audio stream: {err}")
         console.print("[dim]Check microphone access in Windows Privacy Settings.[/]\n")
-        if vision_engine:
-            vision_engine.stop()
+        if air_controller:
+            air_controller.stop()
         tray_manager.stop()
         hotkey_manager.stop()
         fs_monitor.stop()
@@ -300,13 +277,13 @@ def main():
             while not should_exit:
                 time.sleep(0.08)
 
-                # Fetch real-time telemetry from audio engine, vision engine & filesystem watcher
+                # Fetch real-time telemetry from audio engine, air controller & filesystem watcher
                 live_peak, live_rms, live_dbfs, gesture_state = audio_engine.get_telemetry()
                 f_count, d_count = fs_monitor.get_counts()
 
-                cam_active, vision_gesture, _, _, vision_fps = (
-                    vision_engine.get_telemetry() if vision_engine else (False, "NONE", 0.0, 0, 0.0)
-                )
+                air_active = bool(air_controller and air_controller._running)
+                air_mode = air_controller.current_mode if air_active else "STANDBY"
+                air_fps = air_controller.live_fps if air_active else 0.0
 
                 # Build updated Cyberpunk HUD frame
                 panel = build_hud_panel(
@@ -321,9 +298,9 @@ def main():
                     gesture_state=gesture_state,
                     last_event=last_event,
                     is_armed=is_armed,
-                    camera_active=cam_active,
-                    vision_gesture=vision_gesture,
-                    vision_fps=vision_fps,
+                    air_active=air_active,
+                    air_mode=air_mode,
+                    air_fps=air_fps,
                 )
                 live.update(panel)
 
@@ -332,8 +309,8 @@ def main():
             "\n[bold #ff007f]⚡ DISENGAGED[/] [dim]──[/] [dim cyan]Infinity Snap shut down. Audio transducer, camera, and watcher released.[/]\n"
         )
     finally:
-        if vision_engine:
-            vision_engine.stop()
+        if air_controller:
+            air_controller.stop()
         tray_manager.stop()
         hotkey_manager.stop()
         audio_engine.stop()

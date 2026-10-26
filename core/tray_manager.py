@@ -107,7 +107,7 @@ class TrayManager:
         if self.on_toggle_camera:
             menu_items.append(
                 pystray.MenuItem(
-                    "Toggle Camera Tracking (Vision Pro)",
+                    "Toggle Air Desktop Mouse (Vision Pro)",
                     action=self._action_toggle_camera,
                 )
             )

@@ -45,24 +45,15 @@ class ActionRouter:
         config: dict,
         plugin_engine: Optional[object] = None,
         notification_manager: Optional[object] = None,
-        vision_engine: Optional[object] = None,
-        multimodal_fusion: bool = False,
     ):
         self.config = config
         self.monitor_dir = Path(config["monitoring_folder"]).resolve()
         self.action_mode = config.get("action_mode", "NORMAL")
         self.plugin_engine = plugin_engine
         self.notification_manager = notification_manager
-        self.vision_engine = vision_engine
-        self.multimodal_fusion = multimodal_fusion
 
     def execute_gesture(self, snap_count: int, peak_amplitude: float, threshold: float) -> str:
-        """Dispatches action according to registered snap count, with optional visual verification."""
-        # Multimodal fusion check
-        if self.multimodal_fusion and self.vision_engine and self.vision_engine.is_camera_active:
-            if not self.vision_engine.is_snap_posture_recent(window_seconds=1.2):
-                return "Multimodal Guard: Audio snap rejected (Visual hand snap posture required)"
-
+        """Dispatches action according to acoustic snap count (Pure and independent)."""
         if snap_count == 1:
             return self.handle_single_snap(peak_amplitude, threshold)
         elif snap_count >= 2:

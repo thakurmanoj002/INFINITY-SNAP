@@ -44,9 +44,9 @@ def build_hud_panel(
     gesture_state: str,
     last_event: str,
     is_armed: bool = True,
-    camera_active: bool = False,
-    vision_gesture: str = "NONE",
-    vision_fps: float = 0.0,
+    air_active: bool = False,
+    air_mode: str = "STANDBY",
+    air_fps: float = 0.0,
 ) -> Panel:
     """Constructs the Rich Panel representation of the Cyberpunk HUD."""
     abbr_dir = abbreviate_path(monitor_dir, max_length=52)
@@ -105,12 +105,11 @@ def build_hud_panel(
         f"[bold #ffe600]{action_mode}[/] [dim]──[/] [dim #8888aa][Windows Desktop Recycle Bin / 100% Recoverable][/]",
     )
     table.add_row("AUDIO SENSOR", "::", f"[bright_white]{device_name[:38]}[/]")
-    if camera_active:
-        g_color = "#00ff66" if vision_gesture != "NONE" else "dim"
+    if air_active:
         table.add_row(
-            "OPTICAL SENSOR",
+            "AIR CONTROLLER",
             "::",
-            f"[bold #00f0ff]Active ({vision_fps:4.1f} FPS)[/] [dim #ff007f]│[/] [bold #00f0ff]AIR GESTURE:[/] [bold {g_color}]{vision_gesture}[/]",
+            f"[bold #00ff66]Active ({air_fps:4.1f} FPS)[/] [dim #ff007f]│[/] [bold #00f0ff]MODE:[/] [bold white]{air_mode}[/]",
         )
     table.add_row(
         "SECTOR PAYLOAD",
@@ -126,12 +125,12 @@ def build_hud_panel(
     table.add_row("GESTURE DETECTOR", "::", gesture_styled)
     table.add_row("LAST TELEMETRY", "::", f"[italic #ff79c6]{last_event}[/]")
 
-    vision_pill = "[bold #00f0ff]VISION ON[/]" if camera_active else "[dim]VISION OFF[/]"
+    air_pill = "[bold #00ff66]AIR MOUSE ON[/]" if air_active else "[dim]AIR MOUSE OFF[/]"
 
     return Panel(
         table,
         title="[bold #00f0ff]⚡ INFINITY SNAP // NEURAL MULTI-GESTURE HUD ⚡[/]",
-        subtitle=f"[bold #ffe600][Ctrl+C][/] [dim white]EXIT[/]  [dim #00f0ff]│[/]  [bold #00f0ff][Ctrl+Alt+S][/] [dim white]TOGGLE MUTE[/]  [dim #00f0ff]│[/]  [bold #00ff66]TRAY ACTIVE[/]  [dim #00f0ff]│[/]  {vision_pill}",
+        subtitle=f"[bold #ffe600][Ctrl+C][/] [dim white]EXIT[/]  [dim #00f0ff]│[/]  [bold #00f0ff][Ctrl+Alt+S][/] [dim white]TOGGLE MUTE[/]  [dim #00f0ff]│[/]  [bold #00ff66]TRAY ACTIVE[/]  [dim #00f0ff]│[/]  {air_pill}",
         border_style="bright_cyan",
         box=box.ROUNDED,
         padding=(1, 2),

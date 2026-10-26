@@ -11,7 +11,8 @@ Infinity Snap is an audio-reactive Windows desktop automator and folder monitori
 ```text
 INFINITY SNAP/
 │
-├── main.py                     # Central conductor & plug-and-play entry point
+├── main.py                     # Central conductor & acoustic snap surveillance entry point
+├── air_desktop.py              # Standalone Apple Vision Pro spatial air desktop launcher
 ├── config.json                 # Auto-generated or user configuration
 ├── config.example.json         # Example configuration template
 ├── requirements.txt            # Runtime dependencies
@@ -20,16 +21,16 @@ INFINITY SNAP/
 │
 ├── core/                       # Clean modular architecture
 │   ├── __init__.py
+│   ├── air_desktop.py          # Spatial Air Mouse engine (Cursor, Pinch, Scroll, Right Click)
 │   ├── audio_engine.py         # Acoustic transient listener, spectral filter & live VU meter
-│   ├── action_router.py        # Handlers: 1 Snap (Panic Stealth), 2 Snaps (Folder Purge)
+│   ├── action_router.py        # Independent Handlers: 1 Snap (Panic Stealth), 2 Snaps (Folder Purge)
 │   ├── fs_monitor.py           # Win32 FindFirstChangeNotificationW folder observer
 │   ├── hud.py                  # Cyberpunk HUD renderer (live VU, gesture state, payload stats)
 │   ├── config_manager.py       # Configuration loader, saver, and first-run setup wizard
 │   ├── hotkey_manager.py       # Win32 RegisterHotKey OS-wide (Ctrl + Alt + S) toggle
 │   ├── notification_manager.py # Windows 10/11 Action Center native toast notifications
 │   ├── plugin_engine.py        # Asynchronous custom script/webhook dispatcher
-│   ├── tray_manager.py         # Windows System Tray with dynamic glowing emblem
-│   └── vision_engine.py        # Apple Vision Pro 3D hand tracking & air gesture engine
+│   └── tray_manager.py         # Windows System Tray with dynamic glowing emblem
 │
 ├── plugins/                    # Drop custom scripts here (.bat, .ps1, .py, .exe)
 │   ├── single_snap/            # Runs on 1 Snap (Panic Mode)
@@ -156,56 +157,54 @@ Infinity Snap allows you to hook any custom script, external webhook, or IoT aut
 
 ---
 
-## 7. Apple Vision Pro Mode — Spatial Hand & Air Gesture Tracking
+## 7. Spatial Air Desktop Controller (Apple Vision Pro Mode)
 
-Infinity Snap features an optical tracking engine using **Google MediaPipe** and **OpenCV** to track 21 3D joint landmarks on each hand in real-time at 30+ FPS directly from your standard webcam:
+Infinity Snap includes a completely standalone spatial hand controller that translates optical webcam hand movements directly into native Windows mouse interactions:
 
-| Vision Pro Gesture | Physical Hand Motion | Desktop Action Triggered |
+| Spatial Air Gesture | Hand Motion | Windows Desktop Interaction |
 | :--- | :--- | :--- |
-| **Closed Fist** | Clench your fist in view of camera | **Panic Stealth Boss Mode** (Minimizes all windows & mutes volume) |
-| **Open Palm** | Hold open 5 fingers up | **Toggle Mute / Arm** (Standby pause / resume) |
-| **Spatial Pinch** | Tap Index Fingertip to Thumb | **Air Pinch Action** (Fires notification & plugins) |
-| **Snap Posture** | Press Thumb to Middle Finger | **Multimodal Snap Gate** (Verifies acoustic snap posture) |
+| **Air Cursor** | Point index finger in the air | **Moves Mouse Cursor** smoothly with Exponential Moving Average (EMA) jitter filtering |
+| **Pinch Click** | Tap Index Fingertip to Thumb tip | **Left Click** (Hold pinch to **Drag & Drop** files, windows, or sliders) |
+| **Middle Pinch** | Tap Middle Fingertip to Thumb tip | **Right Click** (Instant context menu) |
+| **Two-Finger Scroll** | Glide Index + Middle fingers together | **Buttery Smooth Page & Document Scroll** (Browser / Code editor / Explorer) |
+| **Fist Freeze** | Clench fist or drop hand | **Rest Hand / Freeze Cursor** without moving the mouse |
 
-### 🧬 Multimodal Fusion (Zero False Triggers)
-When running with `--multimodal`, Infinity Snap requires **both** seeing the physical snap hand posture on camera **AND** hearing the acoustic snap sound at that exact moment. Any stray claps, desk bangs, or door slams without a visible hand snap are automatically rejected!
+> **100% Independent**: Acoustic finger snaps and air desktop mouse controls are completely separated. Snaps run purely on acoustic audio triggers, while the Air Desktop Controller runs as an independent spatial mouse whenever you need hands-free desktop interaction!
 
 ---
 
-## 8. Configuration & Commands
+## 8. Launching & Commands
 
-Configuration is loaded from `config.json`:
-```json
-{
-    "monitoring_folder": "C:\\Users\\username\\Desktop\\ENDGAME",
-    "action_mode": "NORMAL",
-    "threshold": 0.50,
-    "cooldown": 1.20,
-    "device": null
-}
-```
-
-### Command-Line Execution Options:
+### 1. Launch Pure Acoustic Snap Surveillance (Instant Snaps)
 ```powershell
-# Standard plug-and-play surveillance
 python main.py
+```
+*Monitors your target folder, engages Cyberpunk live VU meter HUD, handles 1 Snap (Panic) & 2 Snaps (Purge).*
 
-# Launch with Apple Vision Pro camera hand tracking enabled
-python main.py -v
+### 2. Launch Standalone Spatial Air Desktop Controller
+```powershell
+python air_desktop.py
+```
+*Launches Apple Vision Pro spatial hand controller with live Cyberpunk skeleton HUD window.*
 
-# Launch with live Cyberpunk neon skeleton camera preview window
-python main.py -v --cam-preview
+### 3. Launch Both Concurrently
+```powershell
+python main.py --air-desktop
+```
+*Runs acoustic snap surveillance in terminal and air mouse tracking simultaneously.*
 
-# Launch with Multimodal Fusion (zero false positives: requires hand snap + audio snap)
-python main.py -v --multimodal
+### Additional Command-Line Overrides:
+```powershell
+# Run air desktop headless (no preview window)
+python air_desktop.py --no-preview
 
-# Re-open interactive setup wizard
+# Re-open interactive folder setup wizard
 python main.py --setup
 
 # Override audio threshold sensitivity (0.05 to 0.95)
 python main.py -t 0.55
 
-# List all audio input sensors
+# List all audio sensors
 python main.py -l
 ```
 
