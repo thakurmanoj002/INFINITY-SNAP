@@ -40,10 +40,17 @@ VK_VOLUME_MUTE = 0xAD
 class ActionRouter:
     """Dispatches multi-gesture triggers to corresponding desktop automation routines."""
 
-    def __init__(self, config: dict):
+    def __init__(
+        self,
+        config: dict,
+        plugin_engine: Optional[object] = None,
+        notification_manager: Optional[object] = None,
+    ):
         self.config = config
         self.monitor_dir = Path(config["monitoring_folder"]).resolve()
         self.action_mode = config.get("action_mode", "NORMAL")
+        self.plugin_engine = plugin_engine
+        self.notification_manager = notification_manager
 
     def execute_gesture(self, snap_count: int, peak_amplitude: float, threshold: float) -> str:
         """Dispatches action according to registered snap count."""
@@ -56,7 +63,8 @@ class ActionRouter:
     def handle_single_snap(self, peak_amplitude: float, threshold: float) -> str:
         """
         1 Snap Action: Emergency Panic Stealth Boss Mode.
-        Minimizes all desktop windows (Win + D) and mutes master audio volume.
+        Minimizes all desktop windows (Win + D), mutes master audio volume,
+        dispatches custom plugins, and sends a native Windows Action Center toast.
         """
         if sys.platform == "win32":
             user32 = ctypes.windll.user32
@@ -71,24 +79,61 @@ class ActionRouter:
             user32.keybd_event(VK_VOLUME_MUTE, 0, 0, 0)
             user32.keybd_event(VK_VOLUME_MUTE, 0, KEYEVENTF_KEYUP, 0)
 
-        return "1 Snap: Panic Activated (Windows Minimized & Audio Muted)"
+        # 3. Dispatch user plugins
+        plugin_info = ""
+        if self.plugin_engine:
+            dispatched = self.plugin_engine.dispatch_gesture(
+                "single_snap", 1, peak_amplitude, threshold, self.monitor_dir
+            )
+            if dispatched:
+                plugin_info = f" [Plugins: {', '.join(dispatched)}]"
+
+        # 4. Native Windows Toast
+        if self.notification_manager:
+            self.notification_manager.send_toast(
+                "⚡ PANIC STEALTH ENGAGED",
+                "Desktop windows minimized & master volume muted.",
+            )
+
+        return f"1 Snap: Panic Activated (Windows Minimized & Audio Muted){plugin_info}"
 
     def handle_double_snap(self, peak_amplitude: float, threshold: float) -> str:
         """
         2 Snaps Action: Instant Recycle Bin purge of the monitored folder.
+        Purges target sector, triggers double snap plugins, and posts toast notification.
         """
         files, dirs = scan_eligible_items(self.monitor_dir)
         total_targets = files + dirs
 
+        # Dispatch plugins even if sector is already empty
+        plugin_info = ""
+        if self.plugin_engine:
+            dispatched = self.plugin_engine.dispatch_gesture(
+                "double_snap", 2, peak_amplitude, threshold, self.monitor_dir
+            )
+            if dispatched:
+                plugin_info = f" [Plugins: {', '.join(dispatched)}]"
+
         if not total_targets:
-            return "2 Snaps: Zero items in target sector"
+            if self.notification_manager:
+                self.notification_manager.send_toast(
+                    "⚡ FOLDER PURGE TRIGGERED",
+                    "Target sector is already clean (0 items).",
+                )
+            return f"2 Snaps: Zero items in target sector{plugin_info}"
 
         summary = execute_batch_recycle(total_targets, self.monitor_dir)
         success_count = len(summary["succeeded"])
         fail_count = len(summary["failed"])
 
+        if self.notification_manager:
+            self.notification_manager.send_toast(
+                "⚡ FOLDER PURGE COMPLETE",
+                f"Moved {success_count} items from sector to Recycle Bin.",
+            )
+
         if fail_count == 0:
-            return f"2 Snaps: Purged {success_count} items to Recycle Bin (Recoverable)"
+            return f"2 Snaps: Purged {success_count} items to Recycle Bin (Recoverable){plugin_info}"
         else:
-            return f"2 Snaps: Purged {success_count} items ({fail_count} failed)"
+            return f"2 Snaps: Purged {success_count} items ({fail_count} failed){plugin_info}"
 

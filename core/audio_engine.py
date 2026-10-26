@@ -48,6 +48,7 @@ class MultiGestureAudioEngine:
 
         # Telemetry state
         self._lock = threading.Lock()
+        self.is_armed = True
         self.live_peak = 0.0
         self.live_rms = 0.0
         self.live_dbfs = -60.0
@@ -110,6 +111,17 @@ class MultiGestureAudioEngine:
         if self._timer_thread and self._timer_thread.is_alive():
             self._timer_thread.join(timeout=1.0)
 
+    def set_armed(self, armed: bool):
+        """Sets the listening arm state. When paused, sound peaks are ignored."""
+        with self._lock:
+            self.is_armed = armed
+            if not armed:
+                self._snap_count = 0
+                self._window_deadline = 0.0
+                self.gesture_display = "PAUSED (Muted)"
+            else:
+                self.gesture_display = "READY"
+
     def get_telemetry(self) -> Tuple[float, float, float, str]:
         """Returns thread-safe (live_peak, live_rms, live_dbfs, gesture_display)."""
         with self._lock:
@@ -131,6 +143,10 @@ class MultiGestureAudioEngine:
             self.live_peak = peak
             self.live_rms = rms
             self.live_dbfs = dbfs
+
+            # If disarmed/paused, do not trigger any gestures
+            if not self.is_armed:
+                return
 
             # Check if currently in action cooldown
             if self._is_in_cooldown:

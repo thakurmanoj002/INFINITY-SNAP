@@ -58,8 +58,8 @@ def build_hud_panel(
     else:
         status_markup = (
             "[bold black on #ffe600] ○ PAUSED [/] "
-            "[bold #ffe600]DISARMED[/] "
-            "[dim]── Standby mode[/]"
+            "[bold #ffe600]SENSOR MUTED[/] "
+            "[dim]── Standby mode [Press Ctrl+Alt+S to Re-arm][/]"
         )
 
     # Live VU meter bar (20 blocks total)
@@ -119,7 +119,7 @@ def build_hud_panel(
     return Panel(
         table,
         title="[bold #00f0ff]⚡ INFINITY SNAP // NEURAL MULTI-GESTURE HUD ⚡[/]",
-        subtitle="[bold #ffe600][Ctrl+C][/] [dim white]STOP SURVEILLANCE[/]   [dim #00f0ff]│[/]   [dim #00ff66]WIN32 SH_ALLOWUNDO: ACTIVE (RECOVERABLE)[/]",
+        subtitle="[bold #ffe600][Ctrl+C][/] [dim white]EXIT[/]  [dim #00f0ff]│[/]  [bold #00f0ff][Ctrl+Alt+S][/] [dim white]TOGGLE MUTE[/]  [dim #00f0ff]│[/]  [bold #00ff66]TRAY ACTIVE[/]  [dim #00f0ff]│[/]  [dim #00ff66]RECOVERABLE[/]",
         border_style="bright_cyan",
         box=box.ROUNDED,
         padding=(1, 2),

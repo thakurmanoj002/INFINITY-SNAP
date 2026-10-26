@@ -28,7 +28,11 @@ from core.action_router import ActionRouter
 from core.audio_engine import MultiGestureAudioEngine
 from core.config_manager import load_config, run_first_time_setup
 from core.fs_monitor import ContinuousFolderMonitor, validate_monitoring_folder
+from core.hotkey_manager import GlobalHotkeyManager
 from core.hud import build_hud_panel, print_audio_devices
+from core.notification_manager import NotificationManager
+from core.plugin_engine import PluginEngine
+from core.tray_manager import TrayManager
 
 console = Console()
 
@@ -111,23 +115,67 @@ def main():
     threshold = float(config.get("threshold", 0.50))
     cooldown = float(config.get("cooldown", 1.20))
     device = config.get("device")
+    project_root = Path(__file__).resolve().parent
 
-    # Initialize subsystems
-    action_router = ActionRouter(config)
-    fs_monitor = ContinuousFolderMonitor(monitor_dir)
-
-    # State tracking
+    # Operational state
+    is_armed = True
+    should_exit = False
     last_event = "System initialized and armed"
+
+    # Initialize modular subsystems
+    plugin_engine = PluginEngine(project_root)
+    notification_manager = NotificationManager("Infinity Snap")
+    action_router = ActionRouter(
+        config,
+        plugin_engine=plugin_engine,
+        notification_manager=notification_manager,
+    )
+    fs_monitor = ContinuousFolderMonitor(monitor_dir)
 
     def on_gesture_intercepted(count: int, peak: float, thresh: float):
         nonlocal last_event
-        # Dispatch action based on snap count
+        tray_manager.trigger_flash("ARMED" if is_armed else "PAUSED")
         result_msg = action_router.execute_gesture(count, peak, thresh)
         last_event = result_msg
-        # Reconcile directory count immediately after action
         fs_monitor.reconcile()
 
-    # Initialize Multi-Gesture Audio Engine
+    def toggle_arm_state():
+        nonlocal is_armed, last_event
+        is_armed = not is_armed
+        audio_engine.set_armed(is_armed)
+        if is_armed:
+            tray_manager.set_state("ARMED")
+            notification_manager.send_toast(
+                "⚡ SENSOR ARMED",
+                "Surveillance engaged. Listening for acoustic transients.",
+            )
+            last_event = "Sensor re-armed (Ctrl+Alt+S / Tray)"
+        else:
+            tray_manager.set_state("PAUSED")
+            notification_manager.send_toast(
+                "⚡ SENSOR MUTED (PAUSED)",
+                "Microphone listening paused [Ctrl+Alt+S to resume].",
+            )
+            last_event = "Sensor muted/paused (Ctrl+Alt+S / Tray)"
+
+    def trigger_manual_single():
+        nonlocal last_event
+        tray_manager.trigger_flash("ARMED" if is_armed else "PAUSED")
+        result_msg = action_router.handle_single_snap(1.0, threshold)
+        last_event = result_msg
+
+    def trigger_manual_double():
+        nonlocal last_event
+        tray_manager.trigger_flash("ARMED" if is_armed else "PAUSED")
+        result_msg = action_router.handle_double_snap(1.0, threshold)
+        last_event = result_msg
+        fs_monitor.reconcile()
+
+    def request_exit():
+        nonlocal should_exit
+        should_exit = True
+
+    # Initialize Audio Engine
     audio_engine = MultiGestureAudioEngine(
         threshold=threshold,
         cooldown=cooldown,
@@ -135,13 +183,28 @@ def main():
         on_gesture_callback=on_gesture_intercepted,
     )
 
-    # Start hardware listening and filesystem observation
+    # Initialize Windows System Tray & Global Hotkeys
+    tray_manager = TrayManager(
+        monitor_dir=monitor_dir,
+        on_toggle_arm=toggle_arm_state,
+        on_trigger_single=trigger_manual_single,
+        on_trigger_double=trigger_manual_double,
+        on_exit=request_exit,
+    )
+    hotkey_manager = GlobalHotkeyManager(on_toggle=toggle_arm_state)
+
+    # Start hardware listening and background threads
     fs_monitor.start()
+    hotkey_manager.start()
+    tray_manager.start()
+
     try:
         audio_engine.start()
     except Exception as err:
         console.print(f"\n[bold #ff0055][AUDIO ERROR][/] Unable to start audio stream: {err}")
         console.print("[dim]Check microphone access in Windows Privacy Settings.[/]\n")
+        tray_manager.stop()
+        hotkey_manager.stop()
         fs_monitor.stop()
         sys.exit(1)
 
@@ -150,7 +213,7 @@ def main():
         if sys.stdout.isatty():
             console.clear()
         with Live(console=console, refresh_per_second=10, transient=False) as live:
-            while True:
+            while not should_exit:
                 time.sleep(0.08)
 
                 # Fetch real-time telemetry from audio engine & filesystem watcher
@@ -169,18 +232,21 @@ def main():
                     live_dbfs=live_dbfs,
                     gesture_state=gesture_state,
                     last_event=last_event,
-                    is_armed=True,
+                    is_armed=is_armed,
                 )
                 live.update(panel)
 
     except KeyboardInterrupt:
         console.print(
-            "\n[bold #ff007f]⚡ DISENGAGED[/] [dim]──[/] [dim cyan]Infinity Snap shut down. Audio transducer and folder watcher released.[/]\n"
+            "\n[bold #ff007f]⚡ DISENGAGED[/] [dim]──[/] [dim cyan]Infinity Snap shut down. Audio transducer, tray icon, and folder watcher released.[/]\n"
         )
     finally:
+        tray_manager.stop()
+        hotkey_manager.stop()
         audio_engine.stop()
         fs_monitor.stop()
 
 
 if __name__ == "__main__":
     main()
+
